@@ -1,0 +1,64 @@
+#!/bin/bash
+USE_SSH="true"
+SSH_USER="ovpnstatsuser"
+SSH_HOST="ovpnstatshost.domain"
+SSH_IDENTITY="ovpnstatsid"
+
+clear -x
+stty -echo
+
+cleanup() {
+    tput cnorm
+    stty echo
+}
+
+tdiff() {
+    if (($1 < 60)); then
+        printf '%ds' "$1" >&2
+    elif (($1 < 60*60)); then
+        printf '%dm' $(($1 / 60)) >&2
+        tdiff $(($1 % 60))
+    else
+        printf '%dh' $(($1 / (60*60))) >&2
+        tdiff $(($1 % (60*60)))
+    fi
+}
+
+trap cleanup EXIT
+
+CURSIZE=$COLUMNS
+tput civis
+declare STEP=0.5
+declare CNT=0
+declare PRD=5.0
+if [ "$USE_SSH" == "true" ]; then
+        ssh -i $SSH_IDENTITY -T $SSH_USER@$SSH_HOST > /tmp/.ovpn_top
+fi
+while [ 1 -eq 1 ];
+do
+        IFS=''
+        read -s -t 0.1 input
+        case $input in
+                $'q' ) cleanup; break;;
+                $'x'   ) exitFunction;break;;
+        esac
+        unset IFS
+        if [ "$CURSIZE" != "$COLUMNS" ]; then
+                CURSIZE=$COLUMNS;
+                clear;
+        fi
+        printf "\033[H" >&2
+        echo "OpenVPN Top $(date)" >&2
+        if [ "$CNT" == "$PRD" ]; then
+                if [ "$USE_SSH" == "true" ]; then
+                        ssh -i $SSH_IDENTITY -T $SSH_USER@$SSH_HOST > /tmp/.ovpn_top
+                fi
+                CNT=0
+        fi
+                cat /tmp/.ovpn_top|xan from -f json|xan view -t rounded -s 2,0:1,5:6,3:4 -I -M >&2
+                sleep 0.5;
+        if [ "$INPUT" != "" ]; then
+                echo "Input: $INPUT" >&2
+        fi
+        CNT=$(bc -l <<< $CNT+$STEP)
+done
